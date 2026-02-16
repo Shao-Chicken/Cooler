@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>电源温控系统 - 远程控制</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f0f2f5; --card: #fff; --border: #e8e8e8;
+  --text: #333; --text2: #8c8c8c; --text3: #bfbfbf;
+  --primary: #1890ff; --success: #52c41a; --danger: #ff4d4f;
+  --warning: #faad14; --purple: #722ed1;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Microsoft YaHei','Segoe UI',sans-serif; background: var(--bg);
+       color: var(--text); font-size: 13px; min-height: 100vh; -webkit-text-size-adjust: 100%; }
+.header { background: linear-gradient(135deg, #1890ff, #096dd9); color: #fff;
+           padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+           box-shadow: 0 2px 8px rgba(0,0,0,.15); flex-wrap: wrap; gap: 8px; }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header .status { display: flex; gap: 12px 16px; font-size: 12px; align-items: center; flex-wrap: wrap; }
+.header .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+.dot-on { background: #52c41a; } .dot-off { background: #ff4d4f; } .dot-warn { background: #faad14; }
+
+.main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; max-width: 1600px; margin: auto; }
+.full-row { grid-column: 1 / -1; }
+
+.card { background: var(--card); border-radius: 8px; padding: 16px;
+        border: 1px solid var(--border); overflow: hidden; }
+.card h3 { font-size: 14px; color: var(--text); margin-bottom: 12px;
+            padding-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+
+.val-box { background: #fafafa; border-radius: 6px; padding: 10px 12px;
+           border: 1px solid #f0f0f0; min-width: 0; overflow: hidden; }
+.val-box .label { color: var(--text2); font-size: 11px; margin-bottom: 4px; }
+.val-box .value { font-size: 22px; font-weight: 700; color: var(--text); word-break: break-all; }
+.val-box .unit { font-size: 13px; font-weight: 600; color: var(--primary); margin-left: 2px; }
+
+.btn { border: none; border-radius: 6px; padding: 10px 18px; cursor: pointer;
+       font-size: 13px; font-weight: 600; color: #fff; transition: all .2s;
+       touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.btn:hover { opacity: .85; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); opacity: .9; }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.btn-primary { background: var(--primary); }
+.btn-success { background: var(--success); }
+.btn-danger { background: var(--danger); }
+.btn-warning { background: var(--warning); }
+.btn-default { background: #fff; color: var(--text); border: 1px solid var(--border); }
+.btn-default:hover { border-color: var(--primary); color: var(--primary); }
+
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+select, input[type=number] {
+  border: 1px solid #d9d9d9; border-radius: 6px; padding: 8px 10px;
+  font-size: 14px; background: #fff; color: var(--text); outline: none;
+  -webkit-appearance: none; appearance: none; min-height: 38px;
+}
+select:focus, input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(24,144,255,.15); }
+input[type=number] { width: 100px; }
+
+.form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.form-row label { color: var(--text2); font-size: 13px; white-space: nowrap; }
+
+.status-bar { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+.status-item { display: flex; align-items: center; gap: 4px; }
+.status-item .k { color: var(--text2); }
+.status-item .v { font-weight: 600; }
+
+.conn-status { font-weight: 600; font-size: 12px; }
+.conn-on { color: var(--success); } .conn-off { color: var(--danger); }
+
+.chart-container { position: relative; width: 100%; height: 320px; }
+
+/* 温度传感器面板 */
+.temp-panel { display: flex; gap: 16px; }
+.temp-half { flex: 1; min-width: 0; }
+.temp-half h4 { font-size: 13px; margin-bottom: 8px; color: var(--text); }
+
+/* ========== 平板适配 (<=1024px) ========== */
+@media (max-width: 1024px) {
+  .main { grid-template-columns: 1fr; }
+  .full-row { grid-column: 1; }
+}
+
+/* ========== 手机适配 (<=640px) ========== */
+@media (max-width: 640px) {
+  body { font-size: 14px; }
+
+  /* Header 改为垂直堆叠 */
+  .header { padding: 10px 12px; flex-direction: column; align-items: flex-start; }
+  .header h1 { font-size: 16px; }
+  .header .status { gap: 6px 14px; font-size: 11px; }
+
+  /* 主布局 */
+  .main { grid-template-columns: 1fr; gap: 10px; padding: 10px; }
+  .full-row { grid-column: 1; }
+
+  /* 卡片 */
+  .card { padding: 12px; border-radius: 8px; }
+  .card h3 { font-size: 13px; margin-bottom: 10px; }
+
+  /* 网格自适应 */
+  .grid4 { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid3 { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* 数值展示缩小 */
+  .val-box { padding: 8px 10px; }
+  .val-box .value { font-size: 18px; }
+  .val-box .unit { font-size: 12px; }
+
+  /* 表单行改为纵向排列 */
+  .form-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  .form-row label { font-size: 13px; }
+  .form-row > .form-inline-group { display: flex; align-items: center; gap: 8px; }
+
+  select, input[type=number] {
+    width: 100% !important; min-width: 0 !important;
+    font-size: 15px; padding: 10px 12px; min-height: 42px;
+  }
+
+  /* 按钮更大更易触摸 */
+  .btn { padding: 12px 16px; font-size: 14px; border-radius: 8px;
+         min-height: 44px; flex: 1; min-width: 0; text-align: center; }
+  .btn-row { gap: 8px; }
+  .btn-row .conn-status { flex-basis: 100%; text-align: center; margin-top: 4px; }
+
+  /* 温度传感器面板改为上下堆叠 */
+  .temp-panel { flex-direction: column; gap: 16px; }
+  .temp-half { flex: none; width: 100%; }
+  .temp-half .grid3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  /* 图表容器适配 */
+  .chart-container { height: 250px; }
+
+  /* PID 表单中 inline style 的覆盖 */
+  .form-row span { font-size: 14px; }
+}
+
+/* ========== 极小屏适配 (<=380px) ========== */
+@media (max-width: 380px) {
+  .header h1 { font-size: 14px; }
+  .grid4, .grid3 { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .val-box .value { font-size: 16px; }
+  .chart-container { height: 200px; }
+  .btn { padding: 10px 12px; font-size: 13px; }
+  .temp-half .grid3 { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚡ 电源温控系统 - 远程控制面板</h1>
+  <div class="status">
+    <span><span class="dot dot-off" id="hdr_power_dot"></span>电源: <span id="hdr_power">未连接</span></span>
+    <span><span class="dot dot-off" id="hdr_temp1_dot"></span>温度1: <span id="hdr_temp1">未连接</span></span>
+    <span><span class="dot dot-off" id="hdr_temp2_dot"></span>温度2: <span id="hdr_temp2">未连接</span></span>
+    <span><span class="dot dot-off" id="hdr_ws_dot"></span>WebSocket: <span id="hdr_ws">断开</span></span>
+    <span style="opacity:.6" id="update_time">--</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ================== 电源控制 ================== -->
+  <div class="card">
+    <h3>🔌 电源连接</h3>
+    <div class="form-row">
+      <label>串口:</label>
+      <select id="power_port"><option value="">点击刷新获取串口</option></select>
+    </div>
+    <div class="form-row" style="flex-direction:row;flex-wrap:wrap;">
+      <button class="btn btn-default" onclick="refreshPorts()" style="flex:none;">刷新串口</button>
+    </div>
+    <div class="form-row">
+      <label>波特率:</label>
+      <select id="power_baud">
+        <option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>地址:</label>
+      <input type="number" id="power_addr" value="1" min="1" max="127">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-success" id="btn_power_conn" onclick="powerConnect()">连接</button>
+      <button class="btn btn-danger" id="btn_power_disc" onclick="powerDisconnect()" disabled>断开</button>
+      <span class="conn-status conn-off" id="power_status">● 未连接</span>
+    </div>
+  </div>
+
+  <!-- ================== 输出控制 ================== -->
+  <div class="card">
+    <h3>⚡ 输出控制</h3>
+    <div class="form-row">
+      <label>设定电压 (V):</label>
+      <input type="number" id="set_v" value="12.000" step="0.1" min="0" max="60">
+      <button class="btn btn-primary" onclick="setVoltage()" style="flex:none;">设置电压</button>
+    </div>
+    <div class="form-row">
+      <label>设定电流限制 (A):</label>
+      <input type="number" id="set_i" value="7.000" step="0.1" min="0" max="20">
+      <button class="btn btn-primary" onclick="setCurrent()" style="flex:none;">设置电流</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="outputOn()">开启输出</button>
+      <button class="btn btn-danger" onclick="outputOff()">关闭输出</button>
+    </div>
+    <div class="status-bar" style="margin-top:10px;">
+      <span class="status-item"><span class="k">输出状态:</span> <strong class="v" id="output_indicator" style="font-size:16px;">--</strong></span>
+      <span class="status-item"><span class="k">保护:</span> <strong class="v" id="prot_status" style="color:var(--success);">正常</strong></span>
+    </div>
+  </div>
+
+  <!-- ================== 实时监测 ================== -->
+  <div class="card full-row">
+    <h3>📊 实时监测</h3>
+    <div class="grid4">
+      <div class="val-box">
+        <div class="label">输出电压</div>
+        <div><span class="value" id="v_real">---.---</span><span class="unit">V</span></div>
+      </div>
+      <div class="val-box">
+        <div class="label">输出电流</div>
+        <div><span class="value" id="i_real">---.---</span><span class="unit">A</span></div>
+      </div>
+      <div class="val-box">
+        <div class="label">输出功率</div>
+        <div><span class="value" id="p_real">---.--</span><span class="unit">W</span></div>
+      </div>
+      <div class="val-box">
+        <div class="label">工作模式 / 温度</div>
+        <div><span class="value" id="mode_temp">-- / --℃</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== 温度传感器 ================== -->
+  <div class="card full-row">
+    <h3>🌡 温度传感器</h3>
+    <div class="temp-panel">
+      <div class="temp-half">
+        <h4>传感器 1 &nbsp;<span class="conn-status conn-off" id="temp1_status">● 未连接</span></h4>
+        <div class="form-row">
+          <label>串口:</label>
+          <select id="temp1_port"><option value="">--</option></select>
+        </div>
+        <div class="btn-row" style="margin-bottom:10px;">
+          <button class="btn btn-success" onclick="tempConnect(1)">连接</button>
+          <button class="btn btn-danger" onclick="tempDisconnect(1)">断开</button>
+        </div>
+        <div class="grid3">
+          <div class="val-box"><div class="label">DS18B20</div><div><span class="value" id="t1_ds">--</span><span class="unit">℃</span></div></div>
+          <div class="val-box"><div class="label">热端温度</div><div><span class="value" id="t1_hot">--</span><span class="unit">℃</span></div></div>
+          <div class="val-box"><div class="label">冷端温度</div><div><span class="value" id="t1_cold">--</span><span class="unit">℃</span></div></div>
+        </div>
+      </div>
+      <div class="temp-half">
+        <h4>传感器 2 &nbsp;<span class="conn-status conn-off" id="temp2_status">● 未连接</span></h4>
+        <div class="form-row">
+          <label>串口:</label>
+          <select id="temp2_port"><option value="">--</option></select>
+        </div>
+        <div class="btn-row" style="margin-bottom:10px;">
+          <button class="btn btn-success" onclick="tempConnect(2)">连接</button>
+          <button class="btn btn-danger" onclick="tempDisconnect(2)">断开</button>
+        </div>
+        <div class="grid3">
+          <div class="val-box"><div class="label">DS18B20</div><div><span class="value" id="t2_ds">--</span><span class="unit">℃</span></div></div>
+          <div class="val-box"><div class="label">热端温度</div><div><span class="value" id="t2_hot">--</span><span class="unit">℃</span></div></div>
+          <div class="val-box"><div class="label">冷端温度</div><div><span class="value" id="t2_cold">--</span><span class="unit">℃</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== PID 温度控制 ================== -->
+  <div class="card">
+    <h3>🎛 PID 温度控制</h3>
+    <div class="form-row">
+      <label>融合策略:</label>
+      <select id="fusion_mode">
+        <option value="0">双传感器平均</option><option value="1">仅传感器1</option><option value="2">仅传感器2</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>控制模式:</label>
+      <select id="control_mode">
+        <option value="0">制冷模式</option><option value="1">制热模式</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>目标温度 (℃):</label>
+      <input type="number" id="pid_target" value="15.00" step="0.5" min="-20" max="80">
+    </div>
+    <div class="form-row">
+      <label style="color:var(--danger);font-weight:600;">⚠ 安全上限 (℃):</label>
+      <input type="number" id="pid_safety" value="30.0" step="1" min="0" max="80">
+    </div>
+    <div class="form-row">
+      <label>Kp:</label>
+      <input type="number" id="pid_kp" value="1.00" step="0.1" min="0" max="50">
+    </div>
+    <div class="form-row">
+      <label>Ki:</label>
+      <input type="number" id="pid_ki" value="0.050" step="0.01" min="0" max="10">
+    </div>
+    <div class="form-row">
+      <label>Kd:</label>
+      <input type="number" id="pid_kd" value="0.50" step="0.1" min="0" max="50">
+    </div>
+    <div class="form-row">
+      <label>最大电流 (A):</label>
+      <input type="number" id="pid_max_i" value="7.000" step="0.5" min="0.1" max="14">
+    </div>
+    <div class="form-row">
+      <label>最大电压 (V):</label>
+      <input type="number" id="pid_max_v" value="12.0" step="1" min="1" max="15">
+    </div>
+    <div class="form-row">
+      <label>控制周期 (s):</label>
+      <input type="number" id="pid_interval" value="1.0" step="0.5" min="0.5" max="10">
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-primary" onclick="updatePidParams()">应用参数</button>
+      <button class="btn btn-warning" onclick="autoTune()">🔧 整定</button>
+      <button class="btn btn-success" id="btn_pid_start" onclick="startPid()">▶ 启动</button>
+      <button class="btn btn-danger" id="btn_pid_stop" onclick="stopPid()" disabled>⏹ 停止</button>
+      <button class="btn btn-default" onclick="applyTune()">✓ 应用整定</button>
+    </div>
+    <div id="tune_msg" style="margin-top:6px;color:var(--text3);font-size:11px;">未整定 — 使用默认参数</div>
+  </div>
+
+  <!-- ================== 控制状态 ================== -->
+  <div class="card">
+    <h3>📈 控制状态</h3>
+    <div class="grid3">
+      <div class="val-box"><div class="label">控制状态</div><div class="value" id="ctrl_status" style="font-size:14px;color:var(--text3);">● 未启动</div></div>
+      <div class="val-box"><div class="label">当前温度</div><div><span class="value" id="ctrl_temp">--</span><span class="unit">℃</span></div></div>
+      <div class="val-box"><div class="label">目标温度</div><div><span class="value" id="ctrl_target">--</span><span class="unit">℃</span></div></div>
+    </div>
+    <div class="grid3" style="margin-top:8px;">
+      <div class="val-box"><div class="label">温度偏差</div><div><span class="value" id="ctrl_error">--</span><span class="unit">℃</span></div></div>
+      <div class="val-box"><div class="label">输出电流</div><div><span class="value" id="ctrl_output">--</span><span class="unit">A</span></div></div>
+      <div class="val-box"><div class="label">运行时间</div><div class="value" id="ctrl_time" style="font-size:16px;">00:00:00</div></div>
+    </div>
+  </div>
+
+  <!-- ================== 温度曲线图 ================== -->
+  <div class="card full-row">
+    <h3>📉 温度曲线</h3>
+    <div class="chart-container">
+      <canvas id="tempChart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ==================== 全局变量 ====================
+let ws = null;
+let chart = null;
+const API = window.location.origin;
+
+// ==================== 初始化 ====================
+document.addEventListener('DOMContentLoaded', () => {
+  initChart();
+  connectWebSocket();
+  refreshPorts();
+  // 每 30s 刷新历史数据以防 WS 断开
+  setInterval(fetchHistory, 30000);
+});
+
+// ==================== WebSocket ====================
+function connectWebSocket() {
+  const wsUrl = `ws://${window.location.host}/ws`;
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    document.getElementById('hdr_ws').textContent = '已连接';
+    document.getElementById('hdr_ws_dot').className = 'dot dot-on';
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'state') updateUI(msg.data);
+  };
+
+  ws.onclose = () => {
+    document.getElementById('hdr_ws').textContent = '断开';
+    document.getElementById('hdr_ws_dot').className = 'dot dot-off';
+    setTimeout(connectWebSocket, 3000);
+  };
+
+  ws.onerror = () => { ws.close(); };
+}
+
+// ==================== UI 更新 ====================
+function updateUI(s) {
+  // 头部状态
+  setConnDot('hdr_power_dot', 'hdr_power', s.power_connected);
+  setConnDot('hdr_temp1_dot', 'hdr_temp1', s.temp1_connected);
+  setConnDot('hdr_temp2_dot', 'hdr_temp2', s.temp2_connected);
+
+  // 电源连接状态
+  const ps = document.getElementById('power_status');
+  setBtnState(s.power_connected);
+  if (s.power_connected) {
+    ps.textContent = '● 已连接'; ps.className = 'conn-status conn-on';
+  } else {
+    ps.textContent = '● 未连接'; ps.className = 'conn-status conn-off';
+  }
+
+  // 实时数值
+  setText('v_real', s.voltage_real.toFixed(3));
+  setText('i_real', s.current_real.toFixed(3));
+  setText('p_real', s.power_real.toFixed(2));
+  setText('mode_temp', `${s.power_mode} / ${s.power_temperature.toFixed(0)}℃`);
+
+  // 输出指示
+  const oi = document.getElementById('output_indicator');
+  if (s.is_output_on) { oi.textContent = 'ON'; oi.style.color = 'var(--success)'; }
+  else { oi.textContent = 'OFF'; oi.style.color = 'var(--danger)'; }
+
+  const pp = document.getElementById('prot_status');
+  pp.textContent = s.protection_status;
+  pp.style.color = s.protection_status === '正常' ? 'var(--success)' : 'var(--danger)';
+
+  // 温度传感器
+  setTempConn(1, s.temp1_connected);
+  setTempConn(2, s.temp2_connected);
+  setText('t1_ds', s.temp1_ds18b20); setText('t1_hot', s.temp1_hot); setText('t1_cold', s.temp1_cold);
+  setText('t2_ds', s.temp2_ds18b20); setText('t2_hot', s.temp2_hot); setText('t2_cold', s.temp2_cold);
+
+  // PID 状态
+  const cs = document.getElementById('ctrl_status');
+  if (s.pid_auto_tuning) { cs.textContent = '● 自动整定中'; cs.style.color = 'var(--warning)'; }
+  else if (s.pid_enabled) { cs.textContent = '● 运行中'; cs.style.color = 'var(--success)'; }
+  else { cs.textContent = '● 未启动'; cs.style.color = 'var(--text3)'; }
+
+  document.getElementById('btn_pid_start').disabled = s.pid_enabled;
+  document.getElementById('btn_pid_stop').disabled = !s.pid_enabled;
+
+  if (s.fused_temp !== null) setText('ctrl_temp', s.fused_temp.toFixed(2));
+  setText('ctrl_target', s.target_temp.toFixed(2));
+  const errEl = document.getElementById('ctrl_error');
+  errEl.textContent = s.temp_error.toFixed(2);
+  errEl.style.color = Math.abs(s.temp_error) > 1 ? 'var(--danger)' : 'var(--success)';
+  setText('ctrl_output', s.pid_output.toFixed(3));
+
+  const el = s.control_elapsed;
+  const h = Math.floor(el / 3600), m = Math.floor((el % 3600) / 60), sec = Math.floor(el % 60);
+  setText('ctrl_time', `${pad(h)}:${pad(m)}:${pad(sec)}`);
+
+  if (s.auto_tune_message) {
+    document.getElementById('tune_msg').textContent = s.auto_tune_message;
+  }
+
+  // 更新时间
+  if (s.updated_at > 0) {
+    const d = new Date(s.updated_at * 1000);
+    document.getElementById('update_time').textContent = d.toLocaleTimeString();
+  }
+}
+
+function setConnDot(dotId, txtId, connected) {
+  document.getElementById(dotId).className = connected ? 'dot dot-on' : 'dot dot-off';
+  document.getElementById(txtId).textContent = connected ? '已连接' : '未连接';
+}
+
+function setTempConn(idx, connected) {
+  const el = document.getElementById(`temp${idx}_status`);
+  el.textContent = connected ? '● 已连接' : '● 未连接';
+  el.className = connected ? 'conn-status conn-on' : 'conn-status conn-off';
+}
+
+function setBtnState(connected) {
+  document.getElementById('btn_power_conn').disabled = connected;
+  document.getElementById('btn_power_disc').disabled = !connected;
+}
+
+function setText(id, val) { document.getElementById(id).textContent = val; }
+function pad(n) { return n.toString().padStart(2, '0'); }
+
+// ==================== Chart.js ====================
+function initChart() {
+  const ctx = document.getElementById('tempChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: '目标', data: [], borderColor: '#52c41a', borderDash: [6,3], borderWidth: 2.5, pointRadius: 0, yAxisID: 'y', tension: 0.1 },
+        { label: '冷端1', data: [], borderColor: '#1890ff', borderWidth: 2, pointRadius: 0, yAxisID: 'y', tension: 0.2 },
+        { label: '热端1', data: [], borderColor: '#ff7875', borderWidth: 1.5, borderDash: [4,2], pointRadius: 0, yAxisID: 'y', tension: 0.2 },
+        { label: '冷端2', data: [], borderColor: '#722ed1', borderWidth: 2, pointRadius: 0, yAxisID: 'y', tension: 0.2 },
+        { label: '热端2', data: [], borderColor: '#eb2f96', borderWidth: 1.5, borderDash: [4,2], pointRadius: 0, yAxisID: 'y', tension: 0.2 },
+        { label: '输出电流', data: [], borderColor: '#faad14', borderWidth: 2, pointRadius: 0, yAxisID: 'y1', tension: 0.2 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, usePointStyle: true, pointStyle: 'line' } },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        x: { title: { display: true, text: '时间 (s)', font: { size: 11 } },
+             ticks: { font: { size: 10 }, maxTicksLimit: 20 } },
+        y: { title: { display: true, text: '温度 (℃)', font: { size: 11 }, color: '#1890ff' },
+             position: 'left', ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.06)' } },
+        y1:{ title: { display: true, text: '电流 (A)', font: { size: 11 }, color: '#faad14' },
+             position: 'right', ticks: { font: { size: 10 } }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+function updateChart(history) {
+  if (!chart || !history || !history.time) return;
+  chart.data.labels = history.time;
+  chart.data.datasets[0].data = history.target;
+  chart.data.datasets[1].data = history.cold1;
+  chart.data.datasets[2].data = history.hot1;
+  chart.data.datasets[3].data = history.cold2;
+  chart.data.datasets[4].data = history.hot2;
+  chart.data.datasets[5].data = history.output;
+  chart.update('none');
+}
+
+async function fetchHistory() {
+  try {
+    const r = await fetch(API + '/api/history');
+    const data = await r.json();
+    updateChart(data);
+  } catch(e) { console.warn('fetchHistory error', e); }
+}
+
+// 每 2s 拉取历史数据更新图表
+setInterval(fetchHistory, 2000);
+
+// ==================== API 调用 ====================
+async function api(path, body = null) {
+  try {
+    const opt = body !== null
+      ? { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }
+      : { method:'POST' };
+    const r = await fetch(API + path, opt);
+    return await r.json();
+  } catch(e) { console.error('API error', e); return null; }
+}
+
+async function refreshPorts() {
+  try {
+    const r = await fetch(API + '/api/ports');
+    const ports = await r.json();
+    ['power_port','temp1_port','temp2_port'].forEach(id => {
+      const sel = document.getElementById(id);
+      const old = sel.value;
+      sel.innerHTML = '<option value="">-- 选择串口 --</option>';
+      ports.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.device;
+        opt.textContent = `${p.device} - ${p.description}`;
+        sel.appendChild(opt);
+      });
+      if (old) sel.value = old;
+    });
+  } catch(e) { console.warn('refreshPorts error', e); }
+}
+
+function powerConnect() {
+  const port = document.getElementById('power_port').value;
+  if (!port) return alert('请选择串口');
+  api('/api/power/connect', {
+    port, baudrate: parseInt(document.getElementById('power_baud').value),
+    address: parseInt(document.getElementById('power_addr').value)
+  });
+}
+
+function powerDisconnect() { api('/api/power/disconnect'); }
+function setVoltage() { api('/api/power/set_voltage', { voltage: parseFloat(document.getElementById('set_v').value) }); }
+function setCurrent() { api('/api/power/set_current', { current: parseFloat(document.getElementById('set_i').value) }); }
+function outputOn() { api('/api/power/output_on'); }
+function outputOff() { api('/api/power/output_off'); }
+
+function tempConnect(idx) {
+  const port = document.getElementById(`temp${idx}_port`).value;
+  if (!port) return alert('请选择串口');
+  api('/api/temp/connect', { index: idx, port });
+}
+function tempDisconnect(idx) { api('/api/temp/disconnect', { index: idx, port: '' }); }
+
+function updatePidParams() {
+  api('/api/pid/update_params', {
+    kp: parseFloat(document.getElementById('pid_kp').value),
+    ki: parseFloat(document.getElementById('pid_ki').value),
+    kd: parseFloat(document.getElementById('pid_kd').value),
+    max_current: parseFloat(document.getElementById('pid_max_i').value),
+    max_voltage: parseFloat(document.getElementById('pid_max_v').value),
+    control_interval: parseFloat(document.getElementById('pid_interval').value),
+    target_temp: parseFloat(document.getElementById('pid_target').value),
+    safety_temp: parseFloat(document.getElementById('pid_safety').value),
+    fusion_mode: parseInt(document.getElementById('fusion_mode').value),
+    control_mode: parseInt(document.getElementById('control_mode').value),
+  });
+}
+
+function startPid() { updatePidParams(); api('/api/pid/start'); }
+function stopPid() { api('/api/pid/stop'); }
+function autoTune() { updatePidParams(); api('/api/pid/auto_tune'); }
+function applyTune() { api('/api/pid/apply_tune'); }
+</script>
+</body>
+</html>

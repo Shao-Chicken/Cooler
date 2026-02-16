@@ -1,0 +1,26 @@
+[power]
+port = "COM2"
+baudrate = 9600
+address = 1
+voltage = 12.0
+current = 7.0
+
+[temperature]
+sensor1_port = "COM11"
+sensor2_port = "COM9"
+
+[pid]
+target_temp = 38.1
+safety_temp = 45.0
+kp = 2.36
+ki = 0.202
+kd = 6.98
+max_current = 5.0
+max_voltage = 12.0
+control_interval = 0.05
+fusion_mode = 0
+control_mode = 1
+
+[window]
+width = 1800
+height = 860
